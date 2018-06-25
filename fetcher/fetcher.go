@@ -12,9 +12,28 @@ import (
 	"golang.org/x/net/html/charset"
 	"golang.org/x/text/encoding/unicode"
 	"log"
+	"time"
+	"mytest04/crawler/gocrawler/config"
 )
 
-func Fetcher(url string) ([]byte, error) {
+var (
+	rateLimiter   = time.Tick(
+		time.Second / config.Qps)
+	verboseLogging = false
+)
+
+func SetVerboseLogging() {
+	verboseLogging = true
+}
+
+func Fetch(url string) ([]byte, error) {
+
+	<- rateLimiter
+
+	if verboseLogging {
+		log.Printf("Fetching url %s", url)
+	}
+
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, err
@@ -27,7 +46,6 @@ func Fetcher(url string) ([]byte, error) {
 		return nil,
 			fmt.Errorf("wrong status code: %d",
 				resp.StatusCode)
-
 	}
 	bodyReader := bufio.NewReader(resp.Body)
 	e := determineEncoding(bodyReader)

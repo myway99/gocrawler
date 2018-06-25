@@ -1,20 +1,21 @@
 package parser
 
 import (
-	"mytest04/crawler/engine"
+	"mytest04/crawler/gocrawler/engine"
+	"mytest04/crawler/gocrawler/model"
 	"regexp"
 	"strconv"
-	"mytest04/crawler/model"
+	"mytest04/crawler/gocrawler/config"
 )
-
-//var ageRe  = regexp.MustCompile(
-// `<td><span class="label">年龄：</span>[\d]+岁</td>`)
-//var marriageRe  = regexp.MustCompile(
-// `<td><span class="label">婚况：</span>([^<]+)</td>`)
-
 
 var ageRe = regexp.MustCompile(
 	`<td><span class="label">年龄：</span>(\d+)岁</td>`)
+
+//var marriageRe  = regexp.MustCompile(
+// `<td><span class="label">婚况：</span>([^<]+)</td>`)
+
+//var ageRe = regexp.MustCompile(
+//	`<td><span class="label">年龄：</span>(\d+)岁</td>`)
 var heightRe = regexp.MustCompile(
 	`<td><span class="label">身高：</span>(\d+)CM</td>`)
 var incomeRe = regexp.MustCompile(
@@ -40,23 +41,25 @@ var carRe = regexp.MustCompile(
 
 //var guessRe = regexp.MustCompile(
 //	`<a class="exp-user-name"[^>]*href="(http://album.zhenai.com/u/[\d]+)">([^<]+)</a>`)
-//var idUrlRe = regexp.MustCompile(
-//	`http://album.zhenai.com/u/([\d]+)`)
-//
 
+var guessRe = regexp.MustCompile(
+	`<a class="exp-user-name"[^>]*href="(http://album.zhenai.com/u/[\d]+)">([^<]+)</a>`)
 
-func ParseProfile(
-	contents []byte, name string) engine.ParseResult {
-//func ParseProfile(
-//		contents []byte) engine.ParseResult {
+var idUrlRe = regexp.MustCompile(
+	`http://album.zhenai.com/u/([\d]+)`)
 
+func parseProfile(
+	contents []byte, url string,
+	name string) engine.ParseResult {
+	//func ParseProfile(
+	//		contents []byte) engine.ParseResult {
 
 	profile := model.Profile{}
 	profile.Name = name
 
 	age, err := strconv.Atoi(
 		extractString(contents, ageRe))
-	if err != nil {
+	if err == nil {
 		profile.Age = age
 	}
 
@@ -91,10 +94,29 @@ func ParseProfile(
 	profile.Xinzuo = extractString(
 		contents, xinzuoRe)
 
-
-
 	result := engine.ParseResult{
-		Items:	[]interface{}{profile},
+		Items: []engine.Item{
+			{
+				Url:  url,
+				Type: "zhenai",
+				Id: extractString(
+					[]byte(url), idUrlRe),
+				Payload: profile,
+			},
+		},
+	}
+
+	matches := guessRe.FindAllSubmatch(
+		contents, -1)
+	for _, m := range matches {
+		//url := string(m[1])
+		//name := string(m[2])
+		result.Requests = append(result.Requests,
+			engine.Request{
+				Url:	string(m[1]),
+				Parser:  NewProfileParser(
+					string(m[2])),
+			})
 	}
 
 	return result
@@ -113,3 +135,37 @@ func extractString(
 	}
 }
 
+// 手动用ProfileParser实现对userName参数的打包
+type ProfileParser struct {
+	userName string
+}
+
+// 实现ProfileParser接口
+func (p *ProfileParser) Parse(
+	contents []byte,
+	url string) engine.ParseResult {
+
+	return parseProfile(contents, url, p.userName)
+}
+
+func (p *ProfileParser) Serialize() (
+	name string, args interface{}) {
+	return config.ParseProfile, p.userName
+}
+
+// 定义NewProfileParser函数
+func NewProfileParser(
+	name string) *ProfileParser {
+	return &ProfileParser{
+		userName: name,
+	}
+}
+
+//func ProfileParser(
+//	name string) engine.ParserFunc {
+//
+//	return func(
+//		c []byte, url string) engine.ParseResult {
+//		return ParseProfile(c, url, name)
+//	}
+//}
